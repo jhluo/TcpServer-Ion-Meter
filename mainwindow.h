@@ -1,0 +1,42 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QMainWindow>
+
+namespace Ui {
+class MainWindow;
+}
+
+class MainWindowWidget;
+class TheServer;
+
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = 0);
+    ~MainWindow();
+
+private slots:
+    void openDatabaseSettingsDialog();
+    void openServerSettingsDialog();
+
+private:
+    Ui::MainWindow *ui;
+
+    //construct user interface
+    void setupGui();
+
+    //create menu bar
+    void populateMenuBar(QMenuBar *pMenuBar);
+
+    //actions taken when closing the app
+    void closeEvent(QCloseEvent *event);
+
+    //member pointers to necessary objects
+    MainWindowWidget *m_pMainWidget;
+    TheServer *m_pServer;
+};
+
+#endif // MAINWINDOW_H
