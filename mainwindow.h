@@ -34,6 +34,10 @@ private:
     //actions taken when closing the app
     void closeEvent(QCloseEvent *event);
 
+    //save and load application settings from INI
+    void saveAppSettings();
+    void loadAppSettings();
+
     //member pointers to necessary objects
     MainWindowWidget *m_pMainWidget;
     TheServer *m_pServer;

@@ -64,8 +64,10 @@ void ClientTableWidget::updateTable()
         this->setItem(i, 1, new QTableWidgetItem(state));
         if(state == "Offline")
             item(i, 1)->setBackgroundColor(QColor(255, 0, 0));
+        else if(state == "No Data")
+            item(i, 1)->setBackgroundColor(QColor(245, 245, 100));
         else
-            item(i, 1)->setBackgroundColor(QColor(0, 255, 0));
+            item(i, 1)->setBackgroundColor(QColor(0, 240, 100));
 
         this->setItem(i, 2, new QTableWidgetItem(pClient->getClientConnectTime()));
         this->setItem(i, 3, new QTableWidgetItem(pClient->getClientDisconnectTime()));

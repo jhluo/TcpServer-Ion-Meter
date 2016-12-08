@@ -16,7 +16,7 @@ TheServer::TheServer(QObject *pParent)
 
 TheServer::~TheServer()
 {
-    m_ClientList.clear();
+
 }
 
 void TheServer::startServer()
@@ -58,6 +58,7 @@ void TheServer::shutdownServer()
             m_ClientList.at(i)->disconnectClient();
     }
 
+    m_ClientList.clear();
     this->close();
 }
 
@@ -79,28 +80,19 @@ void TheServer::onNewConnection()
     pClient->moveToThread(pClientThread);
     //stop the thread and clean up when pClient is disconnected
     connect(pClient, SIGNAL(newClientConnected()), this, SLOT(onNewClientConnected()));
-    connect(pClient, SIGNAL(clientDisconnected()), pClientThread, SLOT(quit()));
-    connect(pClient, SIGNAL(clientDisconnected()), this, SLOT(onClientDisconnected()));
     connect(pClientThread, SIGNAL(finished()), pClientThread, SLOT(deleteLater()));
 
     pClientThread->start();
 }
 
-void TheServer::onClientDisconnected()
-{
-    AClient* pClient = static_cast<AClient*>(QObject::sender());
-    pClient->disconnectClient();
-    //m_ClientList.removeOne(pClient);
-    //pClient->deleteLater();
-}
 
 void TheServer::onNewClientConnected()
 {
     AClient* pClient = static_cast<AClient*>(QObject::sender());
 
-    //client list on server to keep track of all connect clients
+    //check to see if this device was previously connected and was in "offline" state
     for(int i=0; i<m_ClientList.size(); i++) {
-        if(m_ClientList.at(i)->getClientId() == pClient->getClientId() //if this client was previously connected and no longer in use
+        if(m_ClientList.at(i)->getClientId() == pClient->getClientId()
            && m_ClientList.at(i)->getClientState() != "Online") {
             m_ClientList.at(i)->deleteLater();  //we delete and remove it
             m_ClientList.removeAt(i);

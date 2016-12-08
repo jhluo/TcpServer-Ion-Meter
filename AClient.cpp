@@ -3,6 +3,7 @@
 #include "QScrollBar"
 
 #define DATA_TIMEOUT 60000  //auto disconnect after no data for 60 seconds
+#define DATA_SIZE 50    //size of data frame in bytes
 
 AClient::AClient(QObject *pParent)
     : QObject(pParent),
@@ -16,6 +17,7 @@ AClient::AClient(QObject *pParent)
     //Once DATA_TIMEOUT millsecond is reached, disconnect the client
     m_ClientState = eOnline;
 
+    //Time out the client if stop sending data
     m_pDataStarvedTimer = new QTimer(this);
     m_pDataStarvedTimer->setInterval(DATA_TIMEOUT);
     connect(m_pDataStarvedTimer, SIGNAL(timeout()), this, SLOT(onDataTimeout()));
@@ -29,18 +31,11 @@ AClient::~AClient()
 
 void AClient::setSocket(QTcpSocket *pSocket)
 {
+    //assign the socket to this client and connnect the slots
     m_pSocket = pSocket;
     m_pSocket->setParent(this);
     connect(m_pSocket, SIGNAL(readyRead()), this, SLOT(onDataReceived()));
     connect(m_pSocket, SIGNAL(disconnected()), this, SLOT(onSocketDisconnected()));
-}
-
-void AClient::disconnectClient()
-{
-    this->thread()->quit();
-    this->thread()->wait();
-    m_ClientState = eOffline;
-    m_TimeOfDisconnect = QDateTime::currentDateTime();
 }
 
 void AClient::registerDataViewer(QTextEdit *pTextEdit)
@@ -48,13 +43,22 @@ void AClient::registerDataViewer(QTextEdit *pTextEdit)
     m_pDataViewer = pTextEdit;
 }
 
+void AClient::disconnectClient()
+{
+    m_pSocket->disconnectFromHost();
+}
+
 void AClient::onDataReceived()
 {
     //got data, refresh data timer
     m_pDataStarvedTimer->stop();
+    m_ClientState = eOnline;
 
     //read the incoming data
     QByteArray newData = m_pSocket->readAll();
+
+    if(newData.isEmpty())
+        return;
 
     handleData(newData);
 
@@ -64,11 +68,8 @@ void AClient::onDataReceived()
 
 void AClient::handleData(const QByteArray &newData)
 {
-    if(newData.isEmpty())
-        return;
-
     if(newData.left(1) == "J" //it's a new packet
-       || m_Data.size() >= 50 // lots of data for some reason
+       || m_Data.size() >= DATA_SIZE // member is holding more than it should for some reason
        )
     {
         m_Data.clear(); //clear previous data
@@ -76,43 +77,15 @@ void AClient::handleData(const QByteArray &newData)
 
     m_Data.append(newData);
 
-//    QByteArray data = newData.left(50);
-//    //TODO: Data decode and write to SQL database
-//    QSqlQuery query;
-//        query.prepare("INSERT INTO BJ_epex_DC_2016 (id, SationID, data_date, data_hour, data_Min, 浓度, 湿度, 温度, 正离子数, 风向, 风速, 雨量, 气压, 紫外线, 氧气含量, PM1, PM25, PM10, 错误标志
-//) "
-//                      "VALUES (:id, :SationID, :data_date, :data_hour, :data_Min, :浓度, :湿度, :温度, :正离子数, :风向, :风速, :雨量, :气压, :紫外线, :氧气含量, :PM1, :PM25, :PM10, :错误标志
-//)");
-//        query.bindValue(":id", 1001);
-//        query.bindValue(":name", "Thad Beaumont");
-//        query.bindValue(":salary", 65000);
-//        query.exec();
-
-//    if(newData.isEmpty() || newData.size() < 50 ) {
-//        qDebug() << newData.toHex();
-//        return;
-//    }
-
-    //if the clicent sends more than 10 bad packets, disconnect it
-//    static int badPacketCount = 0;
-
-//    if(header != "JHWTO") {
-//        badPacketCount++;
-//        if(badPacketCount > 10) {
-//            m_pSocket->disconnectFromHost();
-//        }
-//        return;
-//    }
-//    badPacketCount = 0;
-
-    //qDebug() <<"Actual data is:  " << newData.toHex()<<endl;
-
-    if(m_Data.size() < 50) {    //not full packet, we wait till next iteration
+    if(m_Data.size() < DATA_SIZE) {    //not full packet, we wait till next iteration
         return;
     }
 
     //qDebug() <<"Data to be decoded is:  " << m_Data.toHex()<<endl << endl;
 
+    //Here we start decoding because we passed the checks above
+
+    //first we validate the message header
     QString header;
     header.append(m_Data.left(5));
     if(header != "JHWTO") {
@@ -120,21 +93,19 @@ void AClient::handleData(const QByteArray &newData)
         return;
     }
 
-    //once the above checking passed, we can start decoding
-
     bool ok = false;
-
-    if(m_ClientId == 0) //this is the first packet we get, so tell server a new client has connected
+    if(m_ClientId == 0) //this is the first packet we get in this client, so tell server a new client has connected
         emit newClientConnected();
 
     m_ClientId = m_Data.mid(5, 2).toHex().toInt(&ok, 16);
-    //if(m_ClientId != 20001){
-    //    qDebug() << data.toHex() <<endl;
-    //}
 
     int msgCount = m_Data.mid(7, 2).toHex().toInt(&ok, 16);
+    Q_UNUSED(msgCount);
 
     QByteArray bcc = m_Data.mid(9, 1).toHex();
+    Q_UNUSED(bcc);  //message checksum, no use yet
+
+
     if(m_Data.size() < 10)
        return;
     int year = m_Data.mid(10,1).toHex().toInt(&ok, 16);
@@ -164,9 +135,6 @@ void AClient::handleData(const QByteArray &newData)
     double windSpeed = convertToDecimal(m_Data.mid(25,1), m_Data.mid(26,1));
 
     //convert rainfall to a double
-    if(m_Data.size() < 27)
-        return;
-
     const char rain_h = m_Data.at(27);
     const char rain_l = m_Data.at(28);
 
@@ -189,7 +157,9 @@ void AClient::handleData(const QByteArray &newData)
     //pressure needs three bytes
     double pressure = convertToDecimal(m_Data.mid(29, 2), m_Data.mid(31,1));
 
-    double ultraViolet = convertToDecimal(m_Data.mid(32,1), m_Data.mid(33,1));
+    int ultraViolet = m_Data.mid(32, 2).toHex().toInt(&ok, 16);
+
+    //TODO:  BCC check sum stuff on byte 34~36,  not implemented yet
 
     int oxygen = m_Data.mid(37, 2).toHex().toInt(&ok, 16);
 
@@ -200,8 +170,8 @@ void AClient::handleData(const QByteArray &newData)
     int PM10 = m_Data.mid(43, 2).toHex().toInt(&ok, 16);
 
     int error = 0;  //TBD
+
     m_Data.clear(); //done decoding, clear the aray
-    //TODO:  BCC check sum stuff on byte 36~37,  I dont really get it
 
 
     //display the data if there's a viewer dialog opened
@@ -210,16 +180,16 @@ void AClient::handleData(const QByteArray &newData)
                                   "Date: %2\n")
                                   .arg(m_ClientId)
                                   .arg(date);
-        DataStr += QString("Temperature:  %1\n"
-                           "Humidity:  %2\n"
-                           "Negative Ion:  %3\n"
-                           "Positive Ion:  %4\n"
-                           "Wind Direction:  %5\n"
-                           "Wind Speed:  %6\n"
-                           "Rain Fall:  %7\n"
-                           "Pressure:  %8\n"
-                           "Ultra Violet:  %9\n\n"
-                           "Oxygen Concentration:  %10\n"
+        DataStr += QString("Temperature【温度】:  %1\n"
+                           "Humidity【湿度】:  %2\n"
+                           "Negative Ion【负离子】:  %3\n"
+                           "Positive Ion【正离子】:  %4\n"
+                           "Wind Direction【风向】:  %5\n"
+                           "Wind Speed【风速】:  %6\n"
+                           "Rain Fall【雨量】:  %7\n"
+                           "Pressure【气压】:  %8\n"
+                           "Ultra Violet【紫外线】:  %9\n"
+                           "Oxygen Concentration【含氧量】:  %10\n"
                            "PM 1.0:  %11\n"
                            "PM 2.5:  %12\n"
                            "PM 10:  %13\n\n"
@@ -244,40 +214,40 @@ void AClient::handleData(const QByteArray &newData)
     }
 
     //try to connect to database
-//    if(!m_Database.isDatabaseConnected()) //if database is not already opened, open it
-//        if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
-//            LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
-//            QSqlDatabase::removeDatabase(QString::number(m_ClientId));
-//            return;
-//        }
+    if(!m_Database.isDatabaseConnected()) //if database is not already opened, open it
+        if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
+            LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
+            QSqlDatabase::removeDatabase(QString::number(m_ClientId));
+            return;
+        }
 
 //    //here we write data to database
-    qDebug() << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14\n")
-                .arg(temperature)
-                .arg(humidity)
-                .arg(nIonCount)
-                .arg(pIonCount)
-                .arg(windDirection)
-                .arg(windSpeed)
-                .arg(rainfall)
-                .arg(pressure)
-                .arg(ultraViolet)
-                .arg(oxygen)
-                .arg(PM1)
-                .arg(PM25)
-                .arg(PM10)
-    .arg(date);
-//    if(!m_Database.writeData(m_ClientId, date, temperature, humidity, nIonCount, pIonCount, windDirection,
-//                     windSpeed, rainfall, pressure, ultraViolet))
-//        LOG_SYS(QString("Client %1 could not execute query.").arg(QString::number(m_ClientId)));
+//    qDebug() << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14\n")
+//                .arg(temperature)
+//                .arg(humidity)
+//                .arg(nIonCount)
+//                .arg(pIonCount)
+//                .arg(windDirection)
+//                .arg(windSpeed)
+//                .arg(rainfall)
+//                .arg(pressure)
+//                .arg(ultraViolet)
+//                .arg(oxygen)
+//                .arg(PM1)
+//                .arg(PM25)
+//                .arg(PM10)
+//                .arg(date);
+
+    if(!m_Database.writeData(m_ClientId, date, temperature, humidity, nIonCount, pIonCount, windDirection,
+                     windSpeed, rainfall, pressure, ultraViolet, oxygen, PM1, PM25, PM10, error))
+        LOG_SYS(QString("Client %1 could not execute query.").arg(QString::number(m_ClientId)));
 }
 
 //disconnect the client when no data is being sent
 void AClient::onDataTimeout()
 {
     m_pDataStarvedTimer->stop();
-    m_ClientState = eOffline;
-    m_pSocket->disconnectFromHost();
+    m_ClientState = eNoData;
 }
 
 void AClient::onSocketDisconnected()
@@ -288,7 +258,11 @@ void AClient::onSocketDisconnected()
         m_pDataStarvedTimer->stop();
     }
 
-    emit clientDisconnected();
+    this->thread()->quit();
+    this->thread()->wait();
+    m_Database.closeDB(QString::number(m_ClientId));
+    m_ClientState = eOffline;
+    m_TimeOfDisconnect = QDateTime::currentDateTime();
 }
 
 QString AClient::getClientState() const

@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent) :
     setWindowTitle("Server");
     m_pServer = new TheServer(this);
     setupGui();
+    loadAppSettings();
 
     m_pServer->startServer();
 }
@@ -32,10 +33,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_pServer->shutdownServer();
     Logger::getInstance()->registerSystemDisplay(NULL);
 
-    //save current dimension of app
-    AppSettings settings;
-    settings.writeMiscSettings("windowGeometry", saveGeometry());
-    settings.writeMiscSettings("windowState", saveState());
+    saveAppSettings();
     QMainWindow::close();
 }
 
@@ -48,16 +46,6 @@ void MainWindow::setupGui()
     this->setMenuBar(pMenuBar);
     this->menuBar()->show();
     populateMenuBar(pMenuBar);
-
-    //load saveDiemension off App
-    AppSettings settings;
-    QByteArray geometry = settings.readMiscSettings("windowGeometry", QByteArray()).toByteArray();
-    if(!geometry.isEmpty())
-        restoreGeometry(settings.readMiscSettings("windowGeometry", "").toByteArray());
-    else
-        resize(1024, 800);
-
-    restoreState(settings.readMiscSettings("windowState", "").toByteArray());
 }
 
 void MainWindow::populateMenuBar(QMenuBar *pMenuBar)
@@ -83,4 +71,26 @@ void MainWindow::openServerSettingsDialog()
 {
     ServerSettingsDialog dialog(m_pServer, this);
     dialog.exec();
+}
+
+void MainWindow::saveAppSettings()
+{
+    //save current dimension of app
+    AppSettings settings;
+    settings.writeMiscSettings("windowGeometry", saveGeometry());
+    settings.writeMiscSettings("windowState", saveState());
+}
+
+
+void MainWindow::loadAppSettings()
+{
+    //load saveDiemension off App
+    AppSettings settings;
+    QByteArray geometry = settings.readMiscSettings("windowGeometry", QByteArray()).toByteArray();
+    if(!geometry.isEmpty())
+        restoreGeometry(settings.readMiscSettings("windowGeometry", "").toByteArray());
+    else
+        resize(1024, 800);
+
+    restoreState(settings.readMiscSettings("windowState", "").toByteArray());
 }

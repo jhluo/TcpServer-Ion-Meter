@@ -11,6 +11,7 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets core gui network
 TARGET = ServerClient
 TEMPLATE = app
 
+RC_ICONS = epex_logo.ico
 
 SOURCES += main.cpp\
         mainwindow.cpp \

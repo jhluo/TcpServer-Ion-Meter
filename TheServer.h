@@ -18,7 +18,6 @@ public:
 
     void startServer();
     void shutdownServer();
-    void checkClients();
 
     int getTotalClient() const;
     AClient *getClient(const int index);
@@ -29,7 +28,6 @@ private:
 
 private slots:
     void onNewConnection();
-    void onClientDisconnected();
     void onNewClientConnected();
 };
 
