@@ -22,6 +22,8 @@ public:
     int getTotalClient() const;
     AClient *getClient(const int index);
 
+signals:
+
 private:
     //all client connections are added to this list
     QList<AClient*> m_ClientList;

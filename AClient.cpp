@@ -43,9 +43,15 @@ void AClient::registerDataViewer(QTextEdit *pTextEdit)
     m_pDataViewer = pTextEdit;
 }
 
-void AClient::disconnectClient()
+void AClient::closeClient()
 {
-    m_pSocket->disconnectFromHost();
+    //end the thread
+    this->thread()->quit();
+    if(!this->thread()->wait(2000)) //Wait until it actually has terminated (max. 3 sec)
+    {
+        this->thread()->terminate(); //Thread didn't exit in time, probably deadlocked, terminate it!
+        this->thread()->wait(); //We have to wait again here!
+    }
 }
 
 void AClient::onDataReceived()
@@ -108,17 +114,18 @@ void AClient::handleData(const QByteArray &newData)
 
     if(m_Data.size() < 10)
        return;
-    int year = m_Data.mid(10,1).toHex().toInt(&ok, 16);
+    int second = m_Data.mid(10,1).toHex().toInt(&ok, 16);
     int month = m_Data.mid(11,1).toHex().toInt(&ok, 16);
     int day = m_Data.mid(12,1).toHex().toInt(&ok, 16);
     int hour = m_Data.mid(13,1).toHex().toInt(&ok, 16);
     int minute = m_Data.mid(14,1).toHex().toInt(&ok, 16);
-    QString date = QString("%1/%2/%3 %4:%5")
-            .arg(year)
+    QString date = QString("%1/%2/%3 %4:%5:%6")
+            .arg(16)
             .arg(month)
             .arg(day)
             .arg(hour)
-            .arg(minute);
+            .arg(minute)
+            .arg(second);
 
     //convert temperature to floating point number, first argument is higher byte,
     // second argument is lower byte
@@ -214,14 +221,11 @@ void AClient::handleData(const QByteArray &newData)
     }
 
     //try to connect to database
-    if(!m_Database.isDatabaseConnected()) //if database is not already opened, open it
-        if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
-            LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
-            QSqlDatabase::removeDatabase(QString::number(m_ClientId));
-            return;
-        }
+    if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
+        LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
+        return;
+    }
 
-//    //here we write data to database
 //    qDebug() << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14\n")
 //                .arg(temperature)
 //                .arg(humidity)
@@ -258,11 +262,13 @@ void AClient::onSocketDisconnected()
         m_pDataStarvedTimer->stop();
     }
 
-    this->thread()->quit();
-    this->thread()->wait();
-    m_Database.closeDB(QString::number(m_ClientId));
     m_ClientState = eOffline;
+
     m_TimeOfDisconnect = QDateTime::currentDateTime();
+
+
+    //end the thread
+    this->thread()->quit();
 }
 
 QString AClient::getClientState() const

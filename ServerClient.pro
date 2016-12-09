@@ -10,6 +10,7 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets core gui network
 
 TARGET = ServerClient
 TEMPLATE = app
+QTPLUGIN     += qsqlodbc
 
 RC_ICONS = epex_logo.ico
 

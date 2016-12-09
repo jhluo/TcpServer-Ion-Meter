@@ -9,8 +9,6 @@
 TheServer::TheServer(QObject *pParent)
     : QTcpServer(pParent)
 {
-    m_ClientList.clear();
-
     connect(this, SIGNAL(newConnection()), this, SLOT(onNewConnection()));
 }
 
@@ -42,7 +40,7 @@ void TheServer::startServer()
 
     //Test the database
     DatabaseAccess db;
-    if(!db.connectToDB("Test")) {
+    if(!db.connectToDB("000")) {
         LOG_SYS("Failed to connect to database! Go to Settings->Database Settings to configure your database settings");
     } else {
         LOG_SYS("Database connection is ready.");
@@ -52,10 +50,12 @@ void TheServer::startServer()
 void TheServer::shutdownServer()
 {
     LOG_SYS("Stopping all clients and shutting down the server...");
+
     //disconnect all clients first
     for(int i=0; i<m_ClientList.size(); i++){
         if(m_ClientList.at(i)->getClientState()=="Online")
-            m_ClientList.at(i)->disconnectClient();
+            m_ClientList.at(i)->closeClient();
+            m_ClientList.at(i)->deleteLater();
     }
 
     m_ClientList.clear();
@@ -71,6 +71,7 @@ void TheServer::onNewConnection()
     LOG_SYS(QString("New client from %1 has connected").arg(pSocket->peerAddress().toString()));
 
     AClient *pClient = new AClient;
+
     //put the socket(connection) into the client object
     pClient->setSocket(pSocket);
 
@@ -78,6 +79,7 @@ void TheServer::onNewConnection()
     QThread *pClientThread = new QThread(this);
 
     pClient->moveToThread(pClientThread);
+
     //stop the thread and clean up when pClient is disconnected
     connect(pClient, SIGNAL(newClientConnected()), this, SLOT(onNewClientConnected()));
     connect(pClientThread, SIGNAL(finished()), pClientThread, SLOT(deleteLater()));

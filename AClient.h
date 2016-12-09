@@ -26,10 +26,10 @@ public:
 
     void setSocket(QTcpSocket *pSocket);
 
+    void closeClient();
+
     //we use this to register a dialog that will show client data
     void registerDataViewer(QTextEdit *pTextEdit);
-
-    void disconnectClient();
 
     //getter functions to fetch information about the client
     int getClientId() const { return m_ClientId; }
@@ -73,6 +73,8 @@ private:
 signals:
     void error(QTcpSocket::SocketError socketerror);
     void newClientConnected();
+
+public slots:
 
 private slots:
     void onDataReceived();
