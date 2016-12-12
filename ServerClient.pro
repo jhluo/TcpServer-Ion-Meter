@@ -18,7 +18,6 @@ SOURCES += main.cpp\
         mainwindow.cpp \
     Widgets/MainWindowWidget.cpp \
     Misc/Logger.cpp \
-    Misc/DatabaseAccess.cpp \
     Widgets/ClientTableWidget.cpp \
     Misc/AppSettings.cpp \
     Widgets/DatabaseSettingsDialog.cpp \
@@ -30,7 +29,6 @@ SOURCES += main.cpp\
 HEADERS  += mainwindow.h \
     Widgets/MainWindowWidget.h \
     Misc/Logger.h \
-    Misc/DatabaseAccess.h \
     Widgets/ClientTableWidget.h \
     Misc/AppSettings.h \
     Widgets/DatabaseSettingsDialog.h \

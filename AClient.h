@@ -14,12 +14,30 @@ class AClient : public QObject
     Q_OBJECT
 
 public:
+
     //possible state of a client
     enum eClientState {
         eOnline,
         eNoData,
         eOffline
     };
+
+    typedef struct {
+        QString clientDate;
+        double temperature;
+        double humidity;
+        int nIon;
+        int pIon;
+        int windDirection;
+        double windSpeed;
+        double rainfall;
+        double pressure;
+        int ultraViolet;
+        double oxygen;
+        double pm1;
+        double pm25;
+        double pm10;
+    } ClientData;
 
     AClient(QObject *pParent = 0);
     ~AClient();
@@ -45,13 +63,14 @@ public:
 
 private:
     void handleData(const QByteArray &newData);
-    void writeDataLog(const QString &fileName, const QString &dataString);
+
+    void writeDataLog(const QString &fileName, const ClientData &data);
+    void writeRawLog(const QString &fileName, const QByteArray &rawData);
+    bool writeDatabase(const ClientData &data);
 
     QTcpSocket *m_pSocket;
 
-    DatabaseAccess m_Database;
-
-    QByteArray m_Data;
+    QByteArray m_DataBuffer;
 
     //Time stamp when client was connected and disconnected;
     QDateTime m_TimeOfConnect;

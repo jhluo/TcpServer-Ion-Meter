@@ -38,13 +38,13 @@ void TheServer::startServer()
                 );
     }
 
-    //Test the database
-    DatabaseAccess db;
-    if(!db.connectToDB("000")) {
-        LOG_SYS("Failed to connect to database! Go to Settings->Database Settings to configure your database settings");
-    } else {
-        LOG_SYS("Database connection is ready.");
-    }
+//    //Test the database
+//    DatabaseAccess db;
+//    if(!db.connectToDB("000")) {
+//        LOG_SYS("Failed to connect to database! Go to Settings->Database Settings to configure your database settings");
+//    } else {
+//        LOG_SYS("Database connection is ready.");
+//    }
 }
 
 void TheServer::shutdownServer()

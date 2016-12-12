@@ -4,6 +4,7 @@
 #include "QScrollBar"
 #include <QFile>
 #include <QDir>
+#include <QSqlDatabase>
 
 #define DATA_TIMEOUT 60000  //auto disconnect after no data for 60 seconds
 #define DATA_SIZE 50    //size of data frame in bytes
@@ -14,7 +15,7 @@ AClient::AClient(QObject *pParent)
       m_ClientId(0),
       m_pDataViewer(NULL)
 {
-    m_Data.clear();
+    m_DataBuffer.clear();
 
     m_TimeOfConnect = QDateTime::currentDateTime();
     //Once DATA_TIMEOUT millsecond is reached, disconnect the client
@@ -29,7 +30,7 @@ AClient::AClient(QObject *pParent)
 
 AClient::~AClient()
 {
-    m_Data.clear();
+    m_DataBuffer.clear();
 }
 
 void AClient::setSocket(QTcpSocket *pSocket)
@@ -78,16 +79,18 @@ void AClient::onDataReceived()
 void AClient::handleData(const QByteArray &newData)
 {
     if(newData.left(1) == "J" //it's a new packet
-       || m_Data.size() >= DATA_SIZE // member is holding more than it should for some reason
+       || m_DataBuffer.size() >= DATA_SIZE // buffer is holding more than it should for some reason
        )
     {
-        m_Data.clear(); //clear previous data
+        m_DataBuffer.clear(); //clear previous data
     }
 
-    m_Data.append(newData);
+    m_DataBuffer.append(newData);
 
-    if(m_Data.size() < DATA_SIZE) {    //not full packet, we wait till next iteration
+    if(m_DataBuffer.size() < DATA_SIZE) {    //not full packet, we wait till next iteration
         return;
+    } else {
+        m_DataBuffer.left(50);
     }
 
     //qDebug() <<"Data to be decoded is:  " << m_Data.toHex()<<endl << endl;
@@ -96,9 +99,9 @@ void AClient::handleData(const QByteArray &newData)
 
     //first we validate the message header
     QString header;
-    header.append(m_Data.left(5));
+    header.append(m_DataBuffer.left(5));
     if(header != "JHWTO") {
-        m_Data.clear();
+        m_DataBuffer.clear();
         return;
     }
 
@@ -106,47 +109,49 @@ void AClient::handleData(const QByteArray &newData)
     if(m_ClientId == 0) //this is the first packet we get in this client, so tell server a new client has connected
         emit newClientConnected();
 
-    m_ClientId = m_Data.mid(5, 2).toHex().toInt(&ok, 16);
+    m_ClientId = m_DataBuffer.mid(5, 2).toHex().toInt(&ok, 16);
 
-    int msgCount = m_Data.mid(7, 2).toHex().toInt(&ok, 16);
+    int msgCount = m_DataBuffer.mid(7, 2).toHex().toInt(&ok, 16);
     Q_UNUSED(msgCount);
 
-    QByteArray bcc = m_Data.mid(9, 1).toHex();
+    QByteArray bcc = m_DataBuffer.mid(9, 1).toHex();
     Q_UNUSED(bcc);  //message checksum, no use yet
 
 
-    if(m_Data.size() < 10)
+    if(m_DataBuffer.size() < 10)
        return;
-    int second = m_Data.mid(10,1).toHex().toInt(&ok, 16);
-    int month = m_Data.mid(11,1).toHex().toInt(&ok, 16);
-    int day = m_Data.mid(12,1).toHex().toInt(&ok, 16);
-    int hour = m_Data.mid(13,1).toHex().toInt(&ok, 16);
-    int minute = m_Data.mid(14,1).toHex().toInt(&ok, 16);
-    QString date = QString("%1/%2/%3 %4:%5:%6")
-            .arg(16)
-            .arg(month)
-            .arg(day)
-            .arg(hour)
-            .arg(minute)
-            .arg(second);
+
+    ClientData clientData;
+    int second = m_DataBuffer.mid(10,1).toHex().toInt(&ok, 16);
+    int month = m_DataBuffer.mid(11,1).toHex().toInt(&ok, 16);
+    int day = m_DataBuffer.mid(12,1).toHex().toInt(&ok, 16);
+    int hour = m_DataBuffer.mid(13,1).toHex().toInt(&ok, 16);
+    int minute = m_DataBuffer.mid(14,1).toHex().toInt(&ok, 16);
+    clientData.clientDate = QString("%1/%2/%3 %4:%5:%6")
+                            .arg(16)
+                            .arg(month)
+                            .arg(day)
+                            .arg(hour)
+                            .arg(minute)
+                            .arg(second);
 
     //convert temperature to floating point number, first argument is higher byte,
     // second argument is lower byte
-    double temperature = convertToDecimal(m_Data.mid(15,1), m_Data.mid(16,1));
+    clientData.temperature = convertToDecimal(m_DataBuffer.mid(15,1), m_DataBuffer.mid(16,1));
 
     //convert humidity to floating point number, same as temeprature
-    double humidity = convertToDecimal(m_Data.mid(17, 1), m_Data.mid(18,1));
+    clientData.humidity = convertToDecimal(m_DataBuffer.mid(17, 1), m_DataBuffer.mid(18,1));
 
-    int nIonCount = m_Data.mid(19, 2).toHex().toInt(&ok, 16);
-    int pIonCount = m_Data.mid(21, 2).toHex().toInt(&ok, 16);
+    clientData.nIon = m_DataBuffer.mid(19, 2).toHex().toInt(&ok, 16);
+    clientData.pIon = m_DataBuffer.mid(21, 2).toHex().toInt(&ok, 16);
 
-    int windDirection = m_Data.mid(23,2).toHex().toInt(&ok, 16);
+    clientData.windDirection = m_DataBuffer.mid(23,2).toHex().toInt(&ok, 16);
 
-    double windSpeed = convertToDecimal(m_Data.mid(25,1), m_Data.mid(26,1));
+    clientData.windSpeed = convertToDecimal(m_DataBuffer.mid(25,1), m_DataBuffer.mid(26,1));
 
     //convert rainfall to a double
-    const char rain_h = m_Data.at(27);
-    const char rain_l = m_Data.at(28);
+    const char rain_h = m_DataBuffer.at(27);
+    const char rain_l = m_DataBuffer.at(28);
 
     //shift higher-byte 4 bits to left then combine with first 4 bits of lower-byte
     //???this is different than what's in spec, need to verify
@@ -162,26 +167,27 @@ void AClient::handleData(const QByteArray &newData)
     else
         rain_frac = rain_dec/100.0;
 
-    double rainfall = rain_int + rain_frac;
+    clientData.rainfall = rain_int + rain_frac;
 
     //pressure needs three bytes
-    double pressure = convertToDecimal(m_Data.mid(29, 2), m_Data.mid(31,1));
+    clientData.pressure = convertToDecimal(m_DataBuffer.mid(29, 2), m_DataBuffer.mid(31,1));
 
-    int ultraViolet = m_Data.mid(32, 2).toHex().toInt(&ok, 16);
+    clientData.ultraViolet = m_DataBuffer.mid(32, 2).toHex().toInt(&ok, 16);
 
     //TODO:  BCC check sum stuff on byte 34~36,  not implemented yet
 
-    int oxygen = m_Data.mid(37, 2).toHex().toInt(&ok, 16);
+    clientData.oxygen = m_DataBuffer.mid(37, 2).toHex().toInt(&ok, 16) / 10;
 
-    int PM1 = m_Data.mid(39, 2).toHex().toInt(&ok, 16);
+    clientData.pm1 = m_DataBuffer.mid(39, 2).toHex().toInt(&ok, 16) / 10;
 
-    int PM25 = m_Data.mid(41, 2).toHex().toInt(&ok, 16);
+    clientData.pm25 = m_DataBuffer.mid(41, 2).toHex().toInt(&ok, 16) / 10;
 
-    int PM10 = m_Data.mid(43, 2).toHex().toInt(&ok, 16);
+    clientData.pm10 = m_DataBuffer.mid(43, 2).toHex().toInt(&ok, 16) / 10;
 
     int error = 0;  //TBD
+    Q_UNUSED(error);
 
-    m_Data.clear(); //done decoding, clear the aray
+    m_DataBuffer.clear(); //done decoding, clear the aray
 
 
     //display the data if there's a viewer dialog opened
@@ -189,7 +195,7 @@ void AClient::handleData(const QByteArray &newData)
         QString DataStr = QString("ID: %1\n"
                                   "Date: %2\n")
                                   .arg(m_ClientId)
-                                  .arg(date);
+                                  .arg(clientData.clientDate);
         DataStr += QString("Temperature【温度】:  %1\n"
                            "Humidity【湿度】:  %2\n"
                            "Negative Ion【负离子】:  %3\n"
@@ -204,19 +210,19 @@ void AClient::handleData(const QByteArray &newData)
                            "PM 2.5:  %12\n"
                            "PM 10:  %13\n\n"
                            )
-                           .arg(temperature)
-                           .arg(humidity)
-                           .arg(nIonCount)
-                           .arg(pIonCount)
-                           .arg(windDirection)
-                           .arg(windSpeed)
-                           .arg(rainfall)
-                           .arg(pressure)
-                           .arg(ultraViolet)
-                           .arg(oxygen)
-                           .arg(PM1)
-                           .arg(PM25)
-                           .arg(PM10);
+                           .arg(clientData.temperature)
+                           .arg(clientData.humidity)
+                           .arg(clientData.nIon)
+                           .arg(clientData.pIon)
+                           .arg(clientData.windDirection)
+                           .arg(clientData.windSpeed)
+                           .arg(clientData.rainfall)
+                           .arg(clientData.pressure)
+                           .arg(clientData.ultraViolet)
+                           .arg(clientData.oxygen)
+                           .arg(clientData.pm1)
+                           .arg(clientData.pm25)
+                           .arg(clientData.pm10);
 
         m_pDataViewer->append(DataStr);
         //put scroll at bottom to show newest message
@@ -233,54 +239,23 @@ void AClient::handleData(const QByteArray &newData)
             QDir().mkdir("log");
 
         QString fileName = "log//" + QString::number(m_ClientId) + "_log.csv";
-        QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:MM:ss");
-        QString dataStr = QString("%1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15\n")
-                                .arg(QString::number(m_ClientId))
-                                .arg(currentTime)
-                                .arg(temperature)
-                                .arg(humidity)
-                                .arg(nIonCount)
-                                .arg(pIonCount)
-                                .arg(windDirection)
-                                .arg(windSpeed)
-                                .arg(rainfall)
-                                .arg(pressure)
-                                .arg(ultraViolet)
-                                .arg(oxygen)
-                                .arg(PM1)
-                                .arg(PM25)
-                                .arg(PM10);
-
-        writeDataLog(fileName, dataStr);
+        writeDataLog(fileName, clientData);
     }
 
+    bool rawLogEnabled = settings.readMiscSettings("rawLog", false).toBool();
+    if(rawLogEnabled) {
+        if(!QDir("log").exists())
+            QDir().mkdir("log");
+
+        QString fileName = "log//" + QString::number(m_ClientId) + "_raw.txt";
+        writeRawLog(fileName, m_DataBuffer);
+    }
 
     //try to connect to database, only if write to database enabled
-    if(settings.readMiscSettings("writeDatabase", false).toBool()) {
-        if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
-            LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
-            return;
+    if(settings.readMiscSettings("writeDatabase", true).toBool()) {
+        if(!writeDatabase(clientData)) {
+            LOG_SYS(QString("Client %1 failed to write to database.").arg(m_ClientId));
         }
-
-    //    qDebug() << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14\n")
-    //                .arg(temperature)
-    //                .arg(humidity)
-    //                .arg(nIonCount)
-    //                .arg(pIonCount)
-    //                .arg(windDirection)
-    //                .arg(windSpeed)
-    //                .arg(rainfall)
-    //                .arg(pressure)
-    //                .arg(ultraViolet)
-    //                .arg(oxygen)
-    //                .arg(PM1)
-    //                .arg(PM25)
-    //                .arg(PM10)
-    //                .arg(date);
-
-        if(!m_Database.writeData(m_ClientId, date, temperature, humidity, nIonCount, pIonCount, windDirection,
-                         windSpeed, rainfall, pressure, ultraViolet, oxygen, PM1, PM25, PM10, error))
-            LOG_SYS(QString("Client %1 could not execute query.").arg(QString::number(m_ClientId)));
     }
 }
 
@@ -309,7 +284,66 @@ void AClient::onSocketDisconnected()
     this->thread()->quit();
 }
 
-void AClient::writeDataLog(const QString &fileName, const QString &dataString)
+bool AClient::writeDatabase(const ClientData &data)
+{
+//    if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
+//        LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
+//        return;
+//    }
+
+//    if(!m_Database.writeData(m_ClientId, date, temperature, humidity, nIonCount, pIonCount, windDirection,
+//                     windSpeed, rainfall, pressure, ultraViolet, oxygen, PM1, PM25, PM10, error))
+//        LOG_SYS(QString("Client %1 could not execute query.").arg(QString::number(m_ClientId)));
+    bool result = false;
+
+    AppSettings settings;
+    QSqlDatabase db;
+    QString connectionName = QString::number(m_ClientId);
+    if(!QSqlDatabase::contains(connectionName)) {
+        QSqlDatabase db = QSqlDatabase::addDatabase("QODBC", connectionName);
+        QString dsn = QString("Driver={sql server};server=%1;database=%2;uid=%3;pwd=%4;")
+                .arg(settings.readDatabaseSettings("host", "").toString())
+                .arg(settings.readDatabaseSettings("DbName", "").toString())
+                .arg(settings.readDatabaseSettings("user", "").toString())
+                .arg(settings.readDatabaseSettings("password", "").toString());
+
+        db.setDatabaseName(dsn);
+    } else {
+        db = QSqlDatabase::database(connectionName);
+    }
+
+    QString queryStr;
+    queryStr = QString("INSERT INTO 分钟资料 (SationID, data_date, data_hour, data_Min, 浓度, 湿度, 温度, 正离子数, 风向, 风速, 雨量, 气压, 紫外线, 氧气含量, PM1, PM25, PM10, 错误标志)"
+                       "VALUES ('%1', '%2', %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18);"
+                       )
+            .arg(m_ClientId)
+            .arg(data.clientDate)
+            .arg(0)
+            .arg(0)
+            .arg(data.nIon)
+            .arg(data.humidity)
+            .arg(data.temperature)
+            .arg(data.pIon)
+            .arg(data.windDirection)
+            .arg(data.windSpeed)
+            .arg(data.rainfall)
+            .arg(data.pressure)
+            .arg(data.ultraViolet)
+            .arg(data.oxygen)
+            .arg(data.pm1)
+            .arg(data.pm25)
+            .arg(data.pm10)
+            .arg(0);
+
+    QSqlQuery query(db);
+    result = query.exec(queryStr);
+    //qDebug() <<query.lastError();
+    //qDebug() <<query.lastQuery();
+
+    return result;
+}
+
+void AClient::writeDataLog(const QString &fileName, const ClientData &data)
 {
     QFile logFile(fileName);
     QTextStream stream(&logFile);
@@ -322,9 +356,39 @@ void AClient::writeDataLog(const QString &fileName, const QString &dataString)
                << "PM1" << "," << "PM25" << "," << "PM10" << "\n";
     }
 
+    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:MM:ss");
+    QString dataStr = QString("%1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15\n")
+                            .arg(QString::number(m_ClientId))
+                            .arg(currentTime)
+                            .arg(data.temperature)
+                            .arg(data.humidity)
+                            .arg(data.nIon)
+                            .arg(data.pIon)
+                            .arg(data.windDirection)
+                            .arg(data.windSpeed)
+                            .arg(data.rainfall)
+                            .arg(data.pressure)
+                            .arg(data.ultraViolet)
+                            .arg(data.oxygen)
+                            .arg(data.pm1)
+                            .arg(data.pm25)
+                            .arg(data.pm10);
+
     if (logFile.open(QFile::WriteOnly|QFile::Append)) {
-        stream << dataString;
+        stream << dataStr;
         logFile.close();
+    }
+}
+
+void AClient::writeRawLog(const QString &fileName, const QByteArray &rawData)
+{
+    QFile rawFile(fileName);
+    QTextStream stream(&rawFile);
+
+    if (rawFile.open(QFile::WriteOnly|QFile::Append)) {
+        QString rawStr;
+        stream << rawStr.append(rawData.toHex() + "\n");
+        rawFile.close();
     }
 }
 
