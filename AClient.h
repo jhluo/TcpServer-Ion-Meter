@@ -7,7 +7,6 @@
 #include <QDateTime>
 #include <QTextEdit>
 #include <QHostAddress>
-#include "Misc/DatabaseAccess.h"
 
 class AClient : public QObject
 {
@@ -93,6 +92,9 @@ private:
 signals:
     void error(QTcpSocket::SocketError socketerror);
     void newClientConnected();
+
+    //this signal notified GUI to ouput message
+    void outputMessage(const QString &msg);
 
 public slots:
 

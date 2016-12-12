@@ -4,7 +4,9 @@
 #include "QScrollBar"
 #include <QFile>
 #include <QDir>
+#include <QThread>
 #include <QSqlDatabase>
+#include <QSqlQuery>
 
 #define DATA_TIMEOUT 60000  //auto disconnect after no data for 60 seconds
 #define DATA_SIZE 50    //size of data frame in bytes
@@ -45,6 +47,7 @@ void AClient::setSocket(QTcpSocket *pSocket)
 void AClient::registerDataViewer(QTextEdit *pTextEdit)
 {
     m_pDataViewer = pTextEdit;
+    connect(this, SIGNAL(outputMessage(QString)), m_pDataViewer, SLOT(append(QString)));
 }
 
 void AClient::closeClient()
@@ -187,8 +190,6 @@ void AClient::handleData(const QByteArray &newData)
     int error = 0;  //TBD
     Q_UNUSED(error);
 
-    m_DataBuffer.clear(); //done decoding, clear the aray
-
 
     //display the data if there's a viewer dialog opened
     if(m_pDataViewer != NULL) {
@@ -224,10 +225,11 @@ void AClient::handleData(const QByteArray &newData)
                            .arg(clientData.pm25)
                            .arg(clientData.pm10);
 
-        m_pDataViewer->append(DataStr);
-        //put scroll at bottom to show newest message
-        if(m_pDataViewer->verticalScrollBar() != NULL)
-            m_pDataViewer->verticalScrollBar()->setSliderPosition(m_pDataViewer->verticalScrollBar()->maximum());
+        emit outputMessage(DataStr);
+//        m_pDataViewer->append(DataStr);
+//        //put scroll at bottom to show newest message
+//        if(m_pDataViewer->verticalScrollBar() != NULL)
+//            m_pDataViewer->verticalScrollBar()->setSliderPosition(m_pDataViewer->verticalScrollBar()->maximum());
     }
 
     //write to log file, only do it if we have this enabled
@@ -257,6 +259,9 @@ void AClient::handleData(const QByteArray &newData)
             LOG_SYS(QString("Client %1 failed to write to database.").arg(m_ClientId));
         }
     }
+
+
+    m_DataBuffer.clear(); //done decoding, clear the array
 }
 
 
@@ -312,31 +317,36 @@ bool AClient::writeDatabase(const ClientData &data)
         db = QSqlDatabase::database(connectionName);
     }
 
-    QString queryStr;
-    queryStr = QString("INSERT INTO 分钟资料 (SationID, data_date, data_hour, data_Min, 浓度, 湿度, 温度, 正离子数, 风向, 风速, 雨量, 气压, 紫外线, 氧气含量, PM1, PM25, PM10, 错误标志)"
-                       "VALUES ('%1', '%2', %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18);"
-                       )
-            .arg(m_ClientId)
-            .arg(data.clientDate)
-            .arg(0)
-            .arg(0)
-            .arg(data.nIon)
-            .arg(data.humidity)
-            .arg(data.temperature)
-            .arg(data.pIon)
-            .arg(data.windDirection)
-            .arg(data.windSpeed)
-            .arg(data.rainfall)
-            .arg(data.pressure)
-            .arg(data.ultraViolet)
-            .arg(data.oxygen)
-            .arg(data.pm1)
-            .arg(data.pm25)
-            .arg(data.pm10)
-            .arg(0);
+    if(db.open()) {
+        QString queryStr;
+        queryStr = QString("INSERT INTO 分钟资料 (SationID, data_date, data_hour, data_Min, 浓度, 湿度, 温度, 正离子数, 风向, 风速, 雨量, 气压, 紫外线, 氧气含量, PM1, PM25, PM10, 错误标志)"
+                           "VALUES ('%1', '%2', %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18);"
+                           )
+                .arg(m_ClientId)
+                .arg(data.clientDate)
+                .arg(0)
+                .arg(0)
+                .arg(data.nIon)
+                .arg(data.humidity)
+                .arg(data.temperature)
+                .arg(data.pIon)
+                .arg(data.windDirection)
+                .arg(data.windSpeed)
+                .arg(data.rainfall)
+                .arg(data.pressure)
+                .arg(data.ultraViolet)
+                .arg(data.oxygen)
+                .arg(data.pm1)
+                .arg(data.pm25)
+                .arg(data.pm10)
+                .arg(0);
 
-    QSqlQuery query(db);
-    result = query.exec(queryStr);
+        QSqlQuery query(db);
+        result = query.exec(queryStr);
+        db.close();
+    }
+
+
     //qDebug() <<query.lastError();
     //qDebug() <<query.lastQuery();
 

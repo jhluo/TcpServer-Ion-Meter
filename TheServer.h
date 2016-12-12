@@ -5,7 +5,6 @@
 #include <QTcpServer>
 #include <QList>
 
-class DatabaseAccess;
 class AClient;
 
 class TheServer : public QTcpServer
