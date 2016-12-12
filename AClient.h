@@ -45,6 +45,7 @@ public:
 
 private:
     void handleData(const QByteArray &newData);
+    void writeDataLog(const QString &fileName, const QString &dataString);
 
     QTcpSocket *m_pSocket;
 

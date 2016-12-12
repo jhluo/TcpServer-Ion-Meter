@@ -81,7 +81,8 @@ void Logger::writeToOutput(const QString &line, QTextEdit *pDisplay)
 {
     if(pDisplay != NULL) {
         pDisplay->append(line);
-        pDisplay->verticalScrollBar()->setSliderPosition(pDisplay->verticalScrollBar()->maximum());
+        if(pDisplay->verticalScrollBar() != NULL)
+            pDisplay->verticalScrollBar()->setSliderPosition(pDisplay->verticalScrollBar()->maximum());
     }
 }
 

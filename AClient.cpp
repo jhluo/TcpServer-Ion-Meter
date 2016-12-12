@@ -1,6 +1,9 @@
 #include "AClient.h"
 #include "Misc/Logger.h"
+#include "Misc/AppSettings.h"
 #include "QScrollBar"
+#include <QFile>
+#include <QDir>
 
 #define DATA_TIMEOUT 60000  //auto disconnect after no data for 60 seconds
 #define DATA_SIZE 50    //size of data frame in bytes
@@ -217,35 +220,70 @@ void AClient::handleData(const QByteArray &newData)
 
         m_pDataViewer->append(DataStr);
         //put scroll at bottom to show newest message
-        m_pDataViewer->verticalScrollBar()->setSliderPosition(m_pDataViewer->verticalScrollBar()->maximum());
+        if(m_pDataViewer->verticalScrollBar() != NULL)
+            m_pDataViewer->verticalScrollBar()->setSliderPosition(m_pDataViewer->verticalScrollBar()->maximum());
     }
 
-    //try to connect to database
-    if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
-        LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
-        return;
+    //write to log file, only do it if we have this enabled
+    AppSettings settings;
+    bool logEnabled = settings.readMiscSettings("dataLog", false).toBool();
+
+    if(logEnabled) {
+        if(!QDir("log").exists())
+            QDir().mkdir("log");
+
+        QString fileName = "log//" + QString::number(m_ClientId) + "_log.csv";
+        QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:MM:ss");
+        QString dataStr = QString("%1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15\n")
+                                .arg(QString::number(m_ClientId))
+                                .arg(currentTime)
+                                .arg(temperature)
+                                .arg(humidity)
+                                .arg(nIonCount)
+                                .arg(pIonCount)
+                                .arg(windDirection)
+                                .arg(windSpeed)
+                                .arg(rainfall)
+                                .arg(pressure)
+                                .arg(ultraViolet)
+                                .arg(oxygen)
+                                .arg(PM1)
+                                .arg(PM25)
+                                .arg(PM10);
+
+        writeDataLog(fileName, dataStr);
     }
 
-//    qDebug() << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14\n")
-//                .arg(temperature)
-//                .arg(humidity)
-//                .arg(nIonCount)
-//                .arg(pIonCount)
-//                .arg(windDirection)
-//                .arg(windSpeed)
-//                .arg(rainfall)
-//                .arg(pressure)
-//                .arg(ultraViolet)
-//                .arg(oxygen)
-//                .arg(PM1)
-//                .arg(PM25)
-//                .arg(PM10)
-//                .arg(date);
 
-    if(!m_Database.writeData(m_ClientId, date, temperature, humidity, nIonCount, pIonCount, windDirection,
-                     windSpeed, rainfall, pressure, ultraViolet, oxygen, PM1, PM25, PM10, error))
-        LOG_SYS(QString("Client %1 could not execute query.").arg(QString::number(m_ClientId)));
+    //try to connect to database, only if write to database enabled
+    if(settings.readMiscSettings("writeDatabase", false).toBool()) {
+        if(!m_Database.connectToDB(QString::number(m_ClientId))) {  //if not, try opening it
+            LOG_SYS(QString("Client %1 could not open database.  Please check configuration").arg(QString::number(m_ClientId)));
+            return;
+        }
+
+    //    qDebug() << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9 %10 %11 %12 %13 %14\n")
+    //                .arg(temperature)
+    //                .arg(humidity)
+    //                .arg(nIonCount)
+    //                .arg(pIonCount)
+    //                .arg(windDirection)
+    //                .arg(windSpeed)
+    //                .arg(rainfall)
+    //                .arg(pressure)
+    //                .arg(ultraViolet)
+    //                .arg(oxygen)
+    //                .arg(PM1)
+    //                .arg(PM25)
+    //                .arg(PM10)
+    //                .arg(date);
+
+        if(!m_Database.writeData(m_ClientId, date, temperature, humidity, nIonCount, pIonCount, windDirection,
+                         windSpeed, rainfall, pressure, ultraViolet, oxygen, PM1, PM25, PM10, error))
+            LOG_SYS(QString("Client %1 could not execute query.").arg(QString::number(m_ClientId)));
+    }
 }
+
 
 //disconnect the client when no data is being sent
 void AClient::onDataTimeout()
@@ -269,6 +307,25 @@ void AClient::onSocketDisconnected()
 
     //end the thread
     this->thread()->quit();
+}
+
+void AClient::writeDataLog(const QString &fileName, const QString &dataString)
+{
+    QFile logFile(fileName);
+    QTextStream stream(&logFile);
+
+    //write the header if the file wasn't there before
+    if(!logFile.exists()) {
+        stream << "Client ID" << "," << "Time" << "," << "Temperature" << "," << "Humidity" << ","
+               << "Negative Ion" << "," << "Positive Ion" << "," << "Wind Direction" << "," << "Wind Speed" << ","
+               << "Rainfall" << "," << "Pressure" << "," << "Ultraviolet" << "," << "Oxygen" << ","
+               << "PM1" << "," << "PM25" << "," << "PM10" << "\n";
+    }
+
+    if (logFile.open(QFile::WriteOnly|QFile::Append)) {
+        stream << dataString;
+        logFile.close();
+    }
 }
 
 QString AClient::getClientState() const

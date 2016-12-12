@@ -100,10 +100,8 @@ void DatabaseSettingsDialog::onTestConnection()
     //QString dsn = QString("Driver={SQL server};server=XIEZHOUBJ-PC\JOESQLSERVER;database=BJ_epex_DC_2016;uid=sa;Port=1433;pwd=asdf123;");
     db.setDatabaseName(dsn);
     if(!db.open()) {
-        QMessageBox::critical(0,tr("Database Error"),db.lastError().text());
+        QMessageBox::critical(0,tr("Database Error:"),db.lastError().text());
     } else {
-
-
         QMessageBox::information(0, qApp->tr("Connection Succeed"),
             qApp->tr("Database connection is successful.\n"),
             QMessageBox::Ok);

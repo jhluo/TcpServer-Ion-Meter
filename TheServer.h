@@ -20,6 +20,7 @@ public:
     void shutdownServer();
 
     int getTotalClient() const;
+    QList<AClient *> *getClientList();
     AClient *getClient(const int index);
 
 signals:

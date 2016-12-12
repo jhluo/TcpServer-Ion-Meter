@@ -110,6 +110,11 @@ int TheServer::getTotalClient() const
     return m_ClientList.size();
 }
 
+QList<AClient*> *TheServer::getClientList()
+{
+    return &m_ClientList;
+}
+
 AClient* TheServer::getClient(const int index)
 {
     if(index >= m_ClientList.size())

@@ -11,6 +11,7 @@
 class TheServer;
 class ChartViewer;
 class ClientTableWidget;
+class ClientTableView;
 
 class MainWindowWidget : public QWidget
 {
@@ -25,12 +26,19 @@ private:
     void populateWidgets();
 
     ClientTableWidget *m_pClientTable;
+    ClientTableView *m_pClientTableView;
     QTextEdit *m_pLogEdit;
 
     TheServer *m_pServer;
 
-private slots:
+    QCheckBox *m_pDatabaseCheckBox;
+    QCheckBox *m_pLogCheckBox;
+    QPushButton *m_pLogButton;
 
+private slots:
+    void onDatabaseChecked(const bool checked);
+    void onLoggingChecked(const bool checked);
+    void onLogButtonPushed();
 };
 
 #endif // MAINWINDOWWIDGET_H
