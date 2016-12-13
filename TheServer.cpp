@@ -62,7 +62,7 @@ void TheServer::shutdownServer()
     for(int i=0; i<m_ClientList.size(); i++){
         if(m_ClientList.at(i)->getClientState()=="Online")
             m_ClientList.at(i)->closeClient();
-            m_ClientList.at(i)->deleteLater();
+            delete m_ClientList[i];
     }
 
     m_ClientList.clear();
@@ -81,7 +81,6 @@ void TheServer::onNewConnection()
 
     //put the socket(connection) into the client object
     pClient->setSocket(pSocket);
-
 
     QThread *pClientThread = new QThread(this);
 
@@ -103,7 +102,9 @@ void TheServer::onNewClientConnected()
     for(int i=0; i<m_ClientList.size(); i++) {
         if(m_ClientList.at(i)->getClientId() == pClient->getClientId()
            && m_ClientList.at(i)->getClientState() != "Online") {
-            m_ClientList.at(i)->deleteLater();  //we delete and remove it
+            AClient* pOldClient = m_ClientList[i];
+            delete pOldClient->thread();
+            delete pOldClient;
             m_ClientList.removeAt(i);
         }
     }
