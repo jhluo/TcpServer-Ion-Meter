@@ -95,12 +95,14 @@ void ClientTableWidget::mousePressEvent(QMouseEvent *event)
 void ClientTableWidget::showContextMenu(const QPoint& pos) // this is a slot
 {
     Q_UNUSED(pos);
-
-    QMenu *pMenu = new QMenu(this);
-    QAction *pMsgViewAction = new QAction(QString("View Data..."), pMenu);
-    connect(pMsgViewAction, SIGNAL(triggered()), this, SLOT(onMessageViewerTriggered()));
-    pMenu->addAction(pMsgViewAction);
-    pMenu->exec(QCursor::pos());
+    //make sure there is someting to be selected
+    if(rowCount() != 0 && !selectedItems().isEmpty()) {
+        QMenu *pMenu = new QMenu(this);
+        QAction *pMsgViewAction = new QAction(QString("View Data..."), pMenu);
+        connect(pMsgViewAction, SIGNAL(triggered()), this, SLOT(onMessageViewerTriggered()));
+        pMenu->addAction(pMsgViewAction);
+        pMenu->exec(QCursor::pos());
+    }
 }
 
 //Open a message viewer dialg when option selected
