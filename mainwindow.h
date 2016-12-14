@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QTimer>
 
 namespace Ui {
 class MainWindow;
@@ -17,10 +18,6 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
-
-private slots:
-    void openDatabaseSettingsDialog();
-    void openServerSettingsDialog();
 
 private:
     Ui::MainWindow *ui;
@@ -41,6 +38,19 @@ private:
     //member pointers to necessary objects
     MainWindowWidget *m_pMainWidget;
     TheServer *m_pServer;
+
+    //use to notify user for registration
+    QTimer m_NotificationTimer;
+
+public slots:
+    bool validateApp(const QString &key);
+
+private slots:
+    void onNotificationTimer();
+    void openDatabaseSettingsDialog();
+    void openServerSettingsDialog();
+    void openAboutDialog();
+    void openRegistrationDialog();
 };
 
 #endif // MAINWINDOW_H
