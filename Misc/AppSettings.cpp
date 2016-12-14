@@ -5,7 +5,7 @@
 AppSettings::AppSettings(QObject *parent)
     :QSettings(QSettings::IniFormat,
                QSettings::UserScope,
-               "ServerClient", "theServer", parent)
+               "EPEX", "IonServer", parent)
 {
     setDefaultValues();
 }
