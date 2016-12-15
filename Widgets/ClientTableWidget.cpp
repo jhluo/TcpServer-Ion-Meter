@@ -2,6 +2,7 @@
 #include "TheServer.h"
 #include "AClient.h"
 #include "DataViewer.h"
+#include "ClientCommandDialog.h"
 #include "Misc/Logger.h"
 #include <QHeaderView>
 #include <QTimer>
@@ -36,13 +37,13 @@ ClientTableWidget::~ClientTableWidget()
 void ClientTableWidget::setupTable()
 {
     QStringList tableHeaders;
-    tableHeaders <<"ID"<<"Status"<<"Time Online" << "Time Offline" << "Up Time";
+    tableHeaders <<"ID"<<"Status"<<"Time Online" << "  Time Offline  " << "Up Time";
 
     setColumnCount(tableHeaders.count());
     setHorizontalHeaderLabels(tableHeaders);
     //this->verticalHeader()->setVisible(false);
 
-    horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     setSelectionBehavior(QAbstractItemView::SelectRows);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
 }
@@ -98,11 +99,28 @@ void ClientTableWidget::showContextMenu(const QPoint& pos) // this is a slot
     //make sure there is someting to be selected
     if(rowCount() != 0 && !selectedItems().isEmpty()) {
         QMenu *pMenu = new QMenu(this);
+
+        //send command dialog action
+        QAction *pSendCommandAction = new QAction(QString("Send Command..."), pMenu);
+        connect(pSendCommandAction, SIGNAL(triggered()), this, SLOT(onSendCommandTriggered()));
+        pMenu->addAction(pSendCommandAction);
+
+        //open data viewer action
         QAction *pMsgViewAction = new QAction(QString("View Data..."), pMenu);
         connect(pMsgViewAction, SIGNAL(triggered()), this, SLOT(onMessageViewerTriggered()));
         pMenu->addAction(pMsgViewAction);
+
+
         pMenu->exec(QCursor::pos());
     }
+}
+
+//open a dialog to send command to client
+void ClientTableWidget::onSendCommandTriggered()
+{
+    //modaless
+    ClientCommandDialog dialog(m_pServer->getClient(currentRow()), this);
+    dialog.exec();
 }
 
 //Open a message viewer dialg when option selected
@@ -115,7 +133,12 @@ void ClientTableWidget::onMessageViewerTriggered()
     //viewer.exec();
 
     //modal
-    DataViewer *pViewer = new DataViewer(m_pServer->getClient(currentRow()), this);
-    pViewer->setAttribute( Qt::WA_DeleteOnClose, true);
-    pViewer->show();
+    AClient* pSelectedClient = m_pServer->getClient(currentRow());
+    if(pSelectedClient->getDataViewer() == NULL) {
+        DataViewer *pViewer = new DataViewer(pSelectedClient, this);
+        pViewer->setAttribute( Qt::WA_DeleteOnClose, true);
+        pViewer->show();
+    } else {
+        pSelectedClient->getDataViewer()->show();
+    }
 }

@@ -30,6 +30,7 @@ private slots:
     void updateTable();
 
     void onMessageViewerTriggered();
+    void onSendCommandTriggered();
 };
 
 
