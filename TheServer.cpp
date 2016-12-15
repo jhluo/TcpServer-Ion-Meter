@@ -62,7 +62,9 @@ void TheServer::shutdownServer()
     for(int i=0; i<m_ClientList.size(); i++){
         if(m_ClientList.at(i)->getClientState()=="Online")
             m_ClientList.at(i)->closeClient();
-            delete m_ClientList[i];
+            AClient* pClient = m_ClientList[i];
+            delete pClient->thread();
+            delete pClient;
     }
 
     m_ClientList.clear();

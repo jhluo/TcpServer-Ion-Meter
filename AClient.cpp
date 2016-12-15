@@ -79,6 +79,13 @@ void AClient::onDataReceived()
     m_pDataStarvedTimer->start();
 }
 
+void AClient::sendData(const QString &data)
+{
+    int bytes = m_pSocket->write(data.toLocal8Bit());
+    //qDebug() << QString("%1 bytes in buffer, %2 bytes are written").arg(data.toLocal8Bit().size()).arg(bytes);
+    emit bytesSent(bytes);
+}
+
 void AClient::handleData(const QByteArray &newData)
 {
     if(newData.left(1) == "J" //it's a new packet
@@ -109,8 +116,24 @@ void AClient::handleData(const QByteArray &newData)
     }
 
     bool ok = false;
-    if(m_ClientId == 0) //this is the first packet we get in this client, so tell server a new client has connected
+    if(m_ClientId == 0) {//this is the first packet we get in this client, so tell server a new client has connected
+        m_ClientId = m_DataBuffer.mid(5, 2).toHex().toInt(&ok, 16);
         emit newClientConnected();
+        QDateTime currentDateTime = QDateTime::currentDateTime();
+        QDate currentDate = currentDateTime.date();
+        QTime currentTime = currentDateTime.time();
+        QString command=QString("dxsj02:\"%1.%2.%3.%4.%5.%6.%7\"")
+                .arg(currentDate.year()-2000)
+                .arg(currentDate.month())
+                .arg(currentDate.day())
+                .arg(currentDate.dayOfWeek())
+                .arg(currentTime.hour())
+                .arg(currentTime.minute())
+                .arg(currentTime.second());
+
+        sendData(command);
+        qDebug() <<command;
+    }
 
     m_ClientId = m_DataBuffer.mid(5, 2).toHex().toInt(&ok, 16);
 

@@ -31,7 +31,8 @@ SOURCES += main.cpp\
     Widgets/ServerSettingsDialog.cpp \
     Widgets/AboutDialog.cpp \
     Widgets/MainStatusbar.cpp \
-    Widgets/ActivationDialog.cpp
+    Widgets/ActivationDialog.cpp \
+    Widgets/ClientCommandDialog.cpp
 
 HEADERS  += mainwindow.h \
     Widgets/MainWindowWidget.h \
@@ -45,7 +46,7 @@ HEADERS  += mainwindow.h \
     Widgets/ServerSettingsDialog.h \
     Widgets/AboutDialog.h \
     Widgets/MainStatusbar.h \
-    Widgets/ActivationDialog.h
+    Widgets/ActivationDialog.h \
+    Widgets/ClientCommandDialog.h
 
-FORMS    += mainwindow.ui \
-    dialog.ui
+FORMS    += mainwindow.ui

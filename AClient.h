@@ -47,6 +47,7 @@ public:
 
     //we use this to register a dialog that will show client data
     void registerDataViewer(QTextEdit *pTextEdit);
+    QTextEdit *getDataViewer() {return m_pDataViewer;}
 
     //getter functions to fetch information about the client
     int getClientId() const { return m_ClientId; }
@@ -91,12 +92,14 @@ private:
 
 signals:
     void error(QTcpSocket::SocketError socketerror);
+    void bytesSent(const int size);
     void newClientConnected();
 
     //this signal notified GUI to ouput message
     void outputMessage(const QString &msg);
 
 public slots:
+    void sendData(const QString &data);
 
 private slots:
     void onDataReceived();
